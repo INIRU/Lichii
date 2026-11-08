@@ -81,10 +81,8 @@ jobs:
       matrix:
         # Fork: Windows only (the only platform tested here).
         include:
-          # Both Windows builds are clang-cl with ThinLTO; windows-x86_64-pgo adds
-          # lichii-windows.profdata, an MSVC-ABI profile trained on Ocarina of Time (see docs/CI.md).
-          - platform: windows-x86_64
-            runner: windows-2022
+          # clang-cl with ThinLTO plus lichii-windows.profdata, an MSVC-ABI profile trained on
+          # Ocarina of Time (see docs/CI.md).
           - platform: windows-x86_64-pgo
             runner: windows-2022
             pgo: true

@@ -750,6 +750,7 @@ PipelineCache::~PipelineCache() {
     workers.WaitForRequests();
     serialization_thread.WaitForRequests();
     SaveUsedPipelines();
+    serialization_thread.WaitForRequests();
     if (use_vulkan_pipeline_cache && !vulkan_pipeline_cache_filename.empty()) {
         SerializeVulkanPipelineCache(vulkan_pipeline_cache_filename, vulkan_pipeline_cache,
                                      CACHE_VERSION);
@@ -781,14 +782,19 @@ void PipelineCache::SaveUsedPipelines() {
             next.try_emplace(hash, static_cast<u8>(age + 1));
         }
     }
-    std::ofstream file{used_pipelines_filename, std::ios::binary | std::ios::trunc};
-    const u32 count = static_cast<u32>(next.size());
-    file.write(reinterpret_cast<const char*>(&UsedPipelinesMagic), sizeof(UsedPipelinesMagic));
-    file.write(reinterpret_cast<const char*>(&count), sizeof(count));
-    for (const auto& [hash, age] : next) {
-        file.write(reinterpret_cast<const char*>(&hash), sizeof(hash));
-        file.write(reinterpret_cast<const char*>(&age), sizeof(age));
-    }
+    // The file write runs off the GPU thread: this is called when a new area's pipelines appear.
+    serialization_thread.QueueWork(
+        [filename = used_pipelines_filename, next = std::move(next)] {
+            std::ofstream file{filename, std::ios::binary | std::ios::trunc};
+            const u32 count = static_cast<u32>(next.size());
+            file.write(reinterpret_cast<const char*>(&UsedPipelinesMagic),
+                       sizeof(UsedPipelinesMagic));
+            file.write(reinterpret_cast<const char*>(&count), sizeof(count));
+            for (const auto& [hash, age] : next) {
+                file.write(reinterpret_cast<const char*>(&hash), sizeof(hash));
+                file.write(reinterpret_cast<const char*>(&age), sizeof(age));
+            }
+        });
 }
 
 GraphicsPipeline* PipelineCache::CurrentGraphicsPipeline() {
